@@ -1,52 +1,52 @@
 pipeline {
-    agent any
-    
-    environment {
-        DOTNET_SYSTEM_GLOBALIZATION_INVARIANT = '1'
-    }
+    agent none
     
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
+        stage('Build and Test') {
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/dotnet/sdk:8.0' // Use your .NET version
+                    args '--user root' // Ensure permissions if needed
+                    reuseNode true
+                }
             }
-        }
-        
-        stage('Build') {
-            steps {
-                script {
-                    if (isUnix()) {
+            stages {
+                stage('Checkout') {
+                    steps {
+                        checkout scm
+                    }
+                }
+                
+                stage('Restore') {
+                    steps {
                         sh 'dotnet restore'
+                    }
+                }
+                
+                stage('Build') {
+                    steps {
                         sh 'dotnet build --configuration Release'
-                    } else {
-                        bat 'dotnet restore'
-                        bat 'dotnet build --configuration Release'
                     }
                 }
-            }
-        }
-        
-        stage('Test') {
-            steps {
-                script {
-                    if (isUnix()) {
+                
+                stage('Test') {
+                    steps {
                         sh 'dotnet test --no-restore --configuration Release'
-                    } else {
-                        bat 'dotnet test --no-restore --configuration Release'
+                    }
+                }
+                
+                stage('Publish') {
+                    steps {
+                        sh 'dotnet publish --no-restore --configuration Release --output ./publish'
                     }
                 }
             }
         }
         
-        stage('Publish') {
+        stage('Archive Artifacts') {
+            agent any
             steps {
-                script {
-                    if (isUnix()) {
-                        sh 'dotnet publish --no-restore --configuration Release --output ./publish'
-                    } else {
-                        bat 'dotnet publish --no-restore --configuration Release --output .\\publish'
-                    }
-                }
+                archiveArtifacts artifacts: 'publish/**/*', fingerprint: true
             }
         }
     }
