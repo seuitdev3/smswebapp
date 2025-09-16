@@ -1,9 +1,5 @@
 pipeline {
-    agent {
-    any
-        //  label 'dotnet'  // This matches the label of your custom agent
-    }
-    
+    agent any
     
     environment {
         DOTNET_VERSION = '8.0'
@@ -88,4 +84,5 @@ pipeline {
         }
     }
 }
+
 
