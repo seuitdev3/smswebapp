@@ -1,14 +1,40 @@
 pipeline {
     agent any
-    tools {
-        dotnetsdk 'dotnet'  // Uses the globally configured .NET SDK
-    }
+    
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
+        
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    if (isUnix()) {
+                        // Install ICU library based on Linux distribution
+                        sh '''
+                            # Detect distribution and install ICU
+                            if [ -f /etc/redhat-release ] || [ -f /etc/centos-release ]; then
+                                # RedHat/CentOS
+                                sudo yum install -y libicu
+                            elif [ -f /etc/debian_version ]; then
+                                # Debian/Ubuntu
+                                sudo apt-get update
+                                sudo apt-get install -y libicu-dev
+                            elif [ -f /etc/alpine-release ]; then
+                                # Alpine Linux
+                                apk add --no-cache icu-libs
+                            else
+                                echo "Unsupported Linux distribution"
+                                exit 1
+                            fi
+                        '''
+                    }
+                }
+            }
+        }
+        
         stage('Build') {
             steps {
                 script {
@@ -22,6 +48,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Test') {
             steps {
                 script {
@@ -33,6 +60,7 @@ pipeline {
                 }
             }
         }
+        
         stage('Publish') {
             steps {
                 script {
