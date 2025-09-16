@@ -1,24 +1,14 @@
 pipeline {
     agent any
     
+    environment {
+        DOTNET_SYSTEM_GLOBALIZATION_INVARIANT = '1'
+    }
+    
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-            }
-        }
-        
-        stage('Install Dependencies') {
-            steps {
-                script {
-                    if (isUnix()) {
-                        sh '''
-                            # Update package list and install ICU without sudo
-                            apt-get update -o Acquire::AllowInsecureRepositories=true
-                            apt-get install -y --allow-unauthenticated libicu-dev
-                        '''
-                    }
-                }
             }
         }
         
