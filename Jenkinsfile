@@ -12,23 +12,10 @@ pipeline {
             steps {
                 script {
                     if (isUnix()) {
-                        // Install ICU library based on Linux distribution
                         sh '''
-                            # Detect distribution and install ICU
-                            if [ -f /etc/redhat-release ] || [ -f /etc/centos-release ]; then
-                                # RedHat/CentOS
-                                sudo yum install -y libicu
-                            elif [ -f /etc/debian_version ]; then
-                                # Debian/Ubuntu
-                                sudo apt-get update
-                                sudo apt-get install -y libicu-dev
-                            elif [ -f /etc/alpine-release ]; then
-                                # Alpine Linux
-                                apk add --no-cache icu-libs
-                            else
-                                echo "Unsupported Linux distribution"
-                                exit 1
-                            fi
+                            # Update package list and install ICU without sudo
+                            apt-get update -o Acquire::AllowInsecureRepositories=true
+                            apt-get install -y --allow-unauthenticated libicu-dev
                         '''
                     }
                 }
