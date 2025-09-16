@@ -1,53 +1,88 @@
 pipeline {
-    agent none
+    agent {
+        label 'dotnet'  // This matches the label of your custom agent
+    }
+    
+    environment {
+        DOTNET_VERSION = '8.0'
+        BUILD_CONFIGURATION = 'Release'
+        PUBLISH_OUTPUT = './publish'
+    }
     
     stages {
-        stage('Build and Test') {
-            agent {
-                docker {
-                    image 'mcr.microsoft.com/dotnet/sdk:8.0' // Use your .NET version
-                    args '--user root' // Ensure permissions if needed
-                    reuseNode true
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()  // Clean workspace before starting
+            }
+        }
+        
+        stage('Checkout') {
+            steps {
+                checkout scm  // Checkout source code from SCM
+            }
+        }
+        
+        stage('Restore Dependencies') {
+            steps {
+                script {
+                    echo 'Restoring NuGet packages...'
+                    sh 'dotnet restore'
                 }
             }
-            stages {
-                stage('Checkout') {
-                    steps {
-                        checkout scm
-                    }
+        }
+        
+        stage('Build') {
+            steps {
+                script {
+                    echo 'Building application...'
+                    sh "dotnet build --configuration ${env.BUILD_CONFIGURATION} --no-restore"
                 }
-                
-                stage('Restore') {
-                    steps {
-                        sh 'dotnet restore'
-                    }
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                script {
+                    echo 'Running tests...'
+                    sh "dotnet test --configuration ${env.BUILD_CONFIGURATION} --no-build --verbosity normal"
                 }
-                
-                stage('Build') {
-                    steps {
-                        sh 'dotnet build --configuration Release'
-                    }
-                }
-                
-                stage('Test') {
-                    steps {
-                        sh 'dotnet test --no-restore --configuration Release'
-                    }
-                }
-                
-                stage('Publish') {
-                    steps {
-                        sh 'dotnet publish --no-restore --configuration Release --output ./publish'
-                    }
+            }
+        }
+        
+        stage('Publish') {
+            steps {
+                script {
+                    echo 'Publishing application...'
+                    sh "dotnet publish --configuration ${env.BUILD_CONFIGURATION} --output ${env.PUBLISH_OUTPUT} --no-build"
                 }
             }
         }
         
         stage('Archive Artifacts') {
-            agent any
             steps {
-                archiveArtifacts artifacts: 'publish/**/*', fingerprint: true
+                script {
+                    echo 'Archiving build artifacts...'
+                    archiveArtifacts artifacts: "${env.PUBLISH_OUTPUT}/**/*", fingerprint: true
+                }
             }
+        }
+    }
+    
+    post {
+        always {
+            echo "Build completed: ${currentBuild.currentResult}"
+            cleanWs()  // Clean workspace after build
+        }
+        success {
+            echo '✅ Build, test, and publish successful!'
+            slackSend channel: '#builds', message: "✅ .NET Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+        }
+        failure {
+            echo '❌ Build failed!'
+            slackSend channel: '#builds', message: "❌ .NET Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+        }
+        unstable {
+            echo '⚠️ Build unstable!'
         }
     }
 }
