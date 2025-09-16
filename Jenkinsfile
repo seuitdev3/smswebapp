@@ -1,88 +1,57 @@
 pipeline {
     agent any
-    
+
     environment {
-        DOTNET_VERSION = '8.0'
-        BUILD_CONFIGURATION = 'Release'
-        PUBLISH_OUTPUT = './publish'
+        DOTNET_CLI_HOME = "/usr/share/dotnet"  // Update to the correct path for Linux
     }
-    
+
     stages {
-        stage('Clean Workspace') {
-            steps {
-                cleanWs()  // Clean workspace before starting
-            }
-        }
-        
         stage('Checkout') {
             steps {
-                checkout scm  // Checkout source code from SCM
+                checkout scm
             }
         }
-        
+
         stage('Restore Dependencies') {
             steps {
                 script {
-                    echo 'Restoring NuGet packages...'
-                    sh 'dotnet restore'
+                    // Restoring dependencies
+                    sh "dotnet restore"  // Use sh instead of bat for Linux
                 }
             }
         }
-        
+
         stage('Build') {
             steps {
                 script {
-                    echo 'Building application...'
-                    sh "dotnet build --configuration ${env.BUILD_CONFIGURATION} --no-restore"
+                    // Building the application
+                    sh "dotnet build --configuration Release"
                 }
             }
         }
-        
+
         stage('Test') {
             steps {
                 script {
-                    echo 'Running tests...'
-                    sh "dotnet test --configuration ${env.BUILD_CONFIGURATION} --no-build --verbosity normal"
+                    // Running tests
+                    sh "dotnet test --no-restore --configuration Release"
                 }
             }
         }
-        
+
         stage('Publish') {
             steps {
                 script {
-                    echo 'Publishing application...'
-                    sh "dotnet publish --configuration ${env.BUILD_CONFIGURATION} --output ${env.PUBLISH_OUTPUT} --no-build"
-                }
-            }
-        }
-        
-        stage('Archive Artifacts') {
-            steps {
-                script {
-                    echo 'Archiving build artifacts...'
-                    archiveArtifacts artifacts: "${env.PUBLISH_OUTPUT}/**/*", fingerprint: true
+                    // Publishing the application
+                    sh "dotnet publish --no-restore --configuration Release --output ./publish"
                 }
             }
         }
     }
-    
+
     post {
-        always {
-            echo "Build completed: ${currentBuild.currentResult}"
-            cleanWs()  // Clean workspace after build
-        }
         success {
-            echo '✅ Build, test, and publish successful!'
-            slackSend channel: '#builds', message: "✅ .NET Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-        }
-        failure {
-            echo '❌ Build failed!'
-            slackSend channel: '#builds', message: "❌ .NET Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
-        }
-        unstable {
-            echo '⚠️ Build unstable!'
+            echo 'Build, test, and publish successful!'
         }
     }
 }
-
-
