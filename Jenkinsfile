@@ -171,7 +171,7 @@ pipeline {
             emailext (
                 subject: "SUCCESS: Deployment completed - ${env.JOB_NAME}",
                 body: "The application was successfully deployed to ${WIN_SERVER}",
-                to: "devops@yourcompany.com"
+                to: "m.shaaban@seu.edu.sa"
             )
         }
         failure {
@@ -180,7 +180,7 @@ pipeline {
             emailext (
                 subject: "FAILURE: Deployment failed - ${env.JOB_NAME}",
                 body: "The deployment to ${WIN_SERVER} failed. Please check Jenkins logs.",
-                to: "devops@yourcompany.com"
+                to: "m.shaaban@seu.edu.sa"
             )
         }
         always {
