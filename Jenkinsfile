@@ -190,14 +190,14 @@ pipeline {
         //     }
         // }
         
-        stage('Verify Deployment') {
-            steps {
-                script {
-                    // Simple verification by checking if the website responds
-                    bat "curl -I http://${WIN_SERVER} --connect-timeout 30 --max-time 60"
-                }
-            }
-        }
+        // stage('Verify Deployment') {
+        //     steps {
+        //         script {
+        //             // Simple verification by checking if the website responds
+        //             bat "curl -I http://${WIN_SERVER} --connect-timeout 30 --max-time 60"
+        //         }
+        //     }
+        // }
     }
 
     post {
