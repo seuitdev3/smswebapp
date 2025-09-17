@@ -8,13 +8,13 @@ pipeline {
         PUBLISH_OUTPUT_DIR = "./publish"
         
         // Deployment server details
-        WIN_SERVER = "172.30.3.103"                   // Windows Server IP or hostname
-        WIN_DEPLOY_PATH = "C:\\inetpub\\wwwroot\\myapp" // IIS application path
-        WIN_TEMP_PATH = "C:\\Temp\\Deployments"        // Temporary directory on server
+        WIN_SERVER = "172.30.3.103"
+        WIN_DEPLOY_PATH = "C:\\inetpub\\wwwroot\\myapp"
+        WIN_TEMP_PATH = "C:\\Temp\\Deployments"
         
         // Application details
-        APP_POOL_NAME = "MyAppPool01"                    // IIS Application Pool name
-        SITE_NAME = "MyWebsite01"                        // IIS Site name
+        APP_POOL_NAME = "MyAppPool01"
+        SITE_NAME = "MyWebsite01"
     }
 
     stages {
@@ -50,10 +50,7 @@ pipeline {
         
         stage('Create Deployment Package') {
             steps {
-                // Create a zip file for easier transfer
                 sh "zip -r deployment.zip ${PUBLISH_OUTPUT_DIR}/"
-                
-                // Archive the package for later reference
                 archiveArtifacts artifacts: 'deployment.zip', fingerprint: true
             }
         }
@@ -65,7 +62,6 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'windows-admin-password', 
                                    usernameVariable: 'WIN_USERNAME', 
                                    passwordVariable: 'WIN_PASSWORD')]) {
-                        // Upload zip file to Windows server using curl and WinRM
                         sh """
                         curl -T deployment.zip --user ${WIN_USERNAME}:'${WIN_PASSWORD}' \
                         --negotiate -k "https://${WIN_SERVER}:5986/wsman/upload?path=C:\\Temp\\deployment.zip"
@@ -76,7 +72,6 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'windows-admin-password', 
                                    usernameVariable: 'WIN_USERNAME', 
                                    passwordVariable: 'WIN_PASSWORD')]) {
-                        // Execute remote PowerShell script with proper escaping
                         bat """
                         powershell -Command "& {
                             \\$securePassword = ConvertTo-SecureString '${WIN_PASSWORD}' -AsPlainText -Force
@@ -105,7 +100,8 @@ pipeline {
                                 Stop-WebAppPool -Name \\$AppPoolName -ErrorAction SilentlyContinue
                                 
                                 # Backup existing deployment (optional)
-                                \\$backupPath = "\\${DeployPath}_Backup_\\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+                                \\$timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+                                \\$backupPath = "\\${DeployPath}_Backup_\\$timestamp"
                                 if (Test-Path \\$DeployPath) {
                                     Copy-Item \\$DeployPath \\$backupPath -Recurse -Force
                                 }
@@ -157,7 +153,6 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
-                    // Simple verification by checking if the website responds
                     bat "curl -I http://${WIN_SERVER} --connect-timeout 30 --max-time 60"
                 }
             }
@@ -167,7 +162,6 @@ pipeline {
     post {
         success {
             echo 'Build, test, publish, and deployment successful!'
-            // Optional: Send notification
             emailext (
                 subject: "SUCCESS: Deployment completed - ${env.JOB_NAME}",
                 body: "The application was successfully deployed to ${WIN_SERVER}",
@@ -176,7 +170,6 @@ pipeline {
         }
         failure {
             echo 'Deployment failed!'
-            // Optional: Send failure notification
             emailext (
                 subject: "FAILURE: Deployment failed - ${env.JOB_NAME}",
                 body: "The deployment to ${WIN_SERVER} failed. Please check Jenkins logs.",
@@ -184,7 +177,6 @@ pipeline {
             )
         }
         always {
-            // Clean up workspace
             cleanWs()
         }
     }
