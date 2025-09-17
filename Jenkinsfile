@@ -61,6 +61,18 @@ pipeline {
         stage('Deploy to IIS via WinRM') {
             steps {
                 script {
+                    // Step 1: Transfer deployment package to Windows server
+                    withCredentials([usernamePassword(credentialsId: 'windows-admin-password', 
+                                   usernameVariable: 'WIN_USERNAME', 
+                                   passwordVariable: 'WIN_PASSWORD')]) {
+                        // Upload zip file to Windows server using curl and WinRM
+                        sh """
+                        curl -T deployment.zip --user ${WIN_USERNAME}:'${WIN_PASSWORD}' \
+                        --negotiate -k "https://${WIN_SERVER}:5986/wsman/upload?path=C:\\Temp\\deployment.zip"
+                        """
+                    }
+                    
+                    // Step 2: Execute deployment script on Windows server
                     withCredentials([usernamePassword(credentialsId: 'windows-admin-password', 
                                    usernameVariable: 'WIN_USERNAME', 
                                    passwordVariable: 'WIN_PASSWORD')]) {
@@ -81,7 +93,7 @@ pipeline {
                                 }
                                 
                                 # Extract deployment package
-                                \\$zipPath = 'C:\\\\Temp\\\\deployment.zip'
+                                \\$zipPath = 'C:\\Temp\\deployment.zip'
                                 if (Test-Path \\$zipPath) {
                                     Expand-Archive -Path \\$zipPath -DestinationPath \\$TempPath -Force
                                 } else {
@@ -93,25 +105,25 @@ pipeline {
                                 Stop-WebAppPool -Name \\$AppPoolName -ErrorAction SilentlyContinue
                                 
                                 # Backup existing deployment (optional)
-                                \\$backupPath = \\"\\$DeployPath\\_Backup\\_\\$(Get-Date -Format 'yyyyMMdd_HHmmss')\\"
+                                \\$backupPath = "\\${DeployPath}_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
                                 if (Test-Path \\$DeployPath) {
                                     Copy-Item \\$DeployPath \\$backupPath -Recurse -Force
                                 }
                                 
                                 # Remove existing files
                                 if (Test-Path \\$DeployPath) {
-                                    Remove-Item \\"\\$DeployPath\\\\*\\" -Recurse -Force
+                                    Remove-Item "\\${DeployPath}\\*" -Recurse -Force
                                 } else {
                                     New-Item -ItemType Directory -Path \\$DeployPath -Force
                                 }
                                 
                                 # Copy new files
-                                \\$sourcePath = \\"\\$TempPath\\\\\\$PublishOutputDir\\"
-                                Write-Host \\"Copying from: \\$sourcePath\\"
-                                Write-Host \\"Copying to: \\$DeployPath\\"
+                                \\$sourcePath = "\\${TempPath}\\${PublishOutputDir}\\"
+                                Write-Host "Copying from: \\$sourcePath"
+                                Write-Host "Copying to: \\$DeployPath"
                                 
                                 if (Test-Path \\$sourcePath) {
-                                    Copy-Item \\"\\$sourcePath\\\\*\\" \\$DeployPath -Recurse -Force
+                                    Copy-Item "\\${sourcePath}\\*" \\$DeployPath -Recurse -Force
                                 } else {
                                     throw 'Source path not found: ' + \\$sourcePath
                                 }
@@ -155,9 +167,21 @@ pipeline {
     post {
         success {
             echo 'Build, test, publish, and deployment successful!'
+            // Optional: Send notification
+            emailext (
+                subject: "SUCCESS: Deployment completed - ${env.JOB_NAME}",
+                body: "The application was successfully deployed to ${WIN_SERVER}",
+                to: "devops@yourcompany.com"
+            )
         }
         failure {
             echo 'Deployment failed!'
+            // Optional: Send failure notification
+            emailext (
+                subject: "FAILURE: Deployment failed - ${env.JOB_NAME}",
+                body: "The deployment to ${WIN_SERVER} failed. Please check Jenkins logs.",
+                to: "devops@yourcompany.com"
+            )
         }
         always {
             // Clean up workspace
