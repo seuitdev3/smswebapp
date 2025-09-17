@@ -76,14 +76,13 @@ pipeline {
                 script {
                     echo "Starting deployment to Windows server ${WIN_SERVER}"
                     
-                    // Step 1: Transfer files to Windows server using SCP (simpler than WinRM)
+                    // Step 1: Transfer files to Windows server using SCP
                     withCredentials([usernamePassword(credentialsId: WIN_CREDENTIALS_ID, 
                                    usernameVariable: 'WIN_USERNAME', 
                                    passwordVariable: 'WIN_PASSWORD')]) {
                         
                         // Install sshpass if not available for password-based SCP
                         sh """
-                        # Install sshpass if not available
                         if ! command -v sshpass &> /dev/null; then
                             echo "Installing sshpass..."
                             apt-get update && apt-get install -y sshpass
@@ -114,7 +113,7 @@ pipeline {
                                 
                                 Write-Host "Starting deployment process..."
                                 
-                                # Extract deployment package using 7zip or built-in methods
+                                # Extract deployment package
                                 \\$deploymentPackage = "C:\\Temp\\deployment.tar.gz"
                                 \\$extractPath = "C:\\Temp\\deployment_extracted"
                                 
@@ -124,13 +123,12 @@ pipeline {
                                 }
                                 New-Item -ItemType Directory -Path \\$extractPath -Force
                                 
-                                # Extract tar.gz - using 7zip if available, otherwise manual
+                                # Extract tar.gz - using 7zip if available
                                 if (Get-Command 7z -ErrorAction SilentlyContinue) {
                                     Write-Host "Extracting with 7zip..."
                                     7z x \\$deploymentPackage -o"\\$extractPath" -y
                                 } else {
                                     Write-Host "7zip not available, using manual extraction..."
-                                    # Simple manual extraction for tar.gz
                                     \\$stream = [System.IO.File]::OpenRead(\\$deploymentPackage)
                                     \\$gzipStream = New-Object System.IO.Compression.GZipStream(\\$stream, [System.IO.Compression.CompressionMode]::Decompress)
                                     \\$outFile = "\\$extractPath\\deployment.tar"
@@ -247,8 +245,7 @@ pipeline {
                             Write-Host 'Deployment Path Exists: ' \\$result.DeployPathExists
                             Write-Host 'Number of files deployed: ' \\$result.FileCount
                             
-                            # Use \\true without the dollar sign escape for boolean comparison
-                            if (\\$result.AppPoolStatus -eq 'Started' -and \\$result.SiteStatus -eq 'Started' -and \\$result.DeployPathExists -eq \\$true -and \\$result.FileCount -gt 0) {
+                            if (\\$result.AppPoolStatus -eq 'Started' -and \\$result.SiteStatus -eq 'Started' -and \\$result.DeployPathExists -eq $true -and \\$result.FileCount -gt 0) {
                                 exit 0
                             } else {
                                 exit 1
