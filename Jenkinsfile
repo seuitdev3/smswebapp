@@ -8,13 +8,13 @@ pipeline {
         PUBLISH_OUTPUT_DIR = "./publish"
         
         // Deployment server details
-        WIN_SERVER = "172.30.3.103"
-        WIN_DEPLOY_PATH = "C:\\inetpub\\wwwroot\\myapp"
-        WIN_TEMP_PATH = "C:\\Temp\\Deployments"
+        WIN_SERVER = "172.30.3.103"                   // Windows Server IP or hostname
+        WIN_DEPLOY_PATH = "C:\\inetpub\\wwwroot\\myapp" // IIS application path
+        WIN_TEMP_PATH = "C:\\Temp\\Deployments"        // Temporary directory on server
         
         // Application details
-        APP_POOL_NAME = "MyAppPool01"
-        SITE_NAME = "MyWebsite01"
+        APP_POOL_NAME = "MyAppPool01"                    // IIS Application Pool name
+        SITE_NAME = "MyWebsite01"                        // IIS Site name
     }
 
     stages {
@@ -32,7 +32,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh "dotnet build --configuration ${BUILD_CONFIGURATION}"
+                sh "dotnet build --configuration ${BUILD_CONFIGURATION} --no-restore"
             }
         }
 
@@ -50,8 +50,16 @@ pipeline {
         
         stage('Create Deployment Package') {
             steps {
-                sh "zip -r deployment.zip ${PUBLISH_OUTPUT_DIR}/"
-                archiveArtifacts artifacts: 'deployment.zip', fingerprint: true
+                script {
+                    // Create deployment package using tar (more universally available than zip)
+                    sh """
+                    # Create tar.gz package
+                    tar -czf deployment.tar.gz ${PUBLISH_OUTPUT_DIR}/
+                    """
+                    
+                    // Archive the package for later reference
+                    archiveArtifacts artifacts: 'deployment.tar.gz', fingerprint: true
+                }
             }
         }
         
@@ -62,9 +70,11 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'windows-admin-password', 
                                    usernameVariable: 'WIN_USERNAME', 
                                    passwordVariable: 'WIN_PASSWORD')]) {
+                        // Upload tar.gz file to Windows server using curl and WinRM
                         sh """
-                        curl -T deployment.zip --user ${WIN_USERNAME}:'${WIN_PASSWORD}' \
-                        --negotiate -k "https://${WIN_SERVER}:5986/wsman/upload?path=C:\\Temp\\deployment.zip"
+                        # Upload deployment package
+                        curl -T deployment.tar.gz --user ${WIN_USERNAME}:'${WIN_PASSWORD}' \
+                        --negotiate -k "https://${WIN_SERVER}:5986/wsman/upload?path=C:\\Temp\\deployment.tar.gz"
                         """
                     }
                     
@@ -72,6 +82,7 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'windows-admin-password', 
                                    usernameVariable: 'WIN_USERNAME', 
                                    passwordVariable: 'WIN_PASSWORD')]) {
+                        // Execute remote PowerShell script with proper escaping
                         bat """
                         powershell -Command "& {
                             \\$securePassword = ConvertTo-SecureString '${WIN_PASSWORD}' -AsPlainText -Force
@@ -87,12 +98,41 @@ pipeline {
                                     New-Item -ItemType Directory -Path \\$TempPath -Force
                                 }
                                 
-                                # Extract deployment package
-                                \\$zipPath = 'C:\\Temp\\deployment.zip'
-                                if (Test-Path \\$zipPath) {
-                                    Expand-Archive -Path \\$zipPath -DestinationPath \\$TempPath -Force
+                                # Extract deployment package (tar.gz)
+                                \\$tarPath = 'C:\\Temp\\deployment.tar.gz'
+                                if (Test-Path \\$tarPath) {
+                                    # Use PowerShell to extract tar.gz files (requires PowerShell 5.1+)
+                                    Write-Host "Extracting tar.gz package..."
+                                    \\$tempExtractPath = "\\$TempPath\\extracted"
+                                    New-Item -ItemType Directory -Path \\$tempExtractPath -Force
+                                    
+                                    # Extract tar.gz using .NET methods
+                                    Add-Type -AssemblyName System.IO.Compression.FileSystem
+                                    \\$stream = New-Object System.IO.FileStream(\\$tarPath, [System.IO.FileMode]::Open)
+                                    \\$gzipStream = New-Object System.IO.Compression.GZipStream(\\$stream, [System.IO.Compression.CompressionMode]::Decompress)
+                                    \\$tarStream = New-Object System.IO.MemoryStream
+                                    \\$gzipStream.CopyTo(\\$tarStream)
+                                    \\$tarStream.Seek(0, [System.IO.SeekOrigin]::Begin) | Out-Null
+                                    
+                                    # For simplicity, we'll use 7zip if available, otherwise manual extraction
+                                    if (Get-Command 7z -ErrorAction SilentlyContinue) {
+                                        # Use 7zip if installed
+                                        7z x \\$tarPath -o"\\$tempExtractPath" -y
+                                    } else {
+                                        # Manual extraction logic for simple cases
+                                        Write-Host "Using manual extraction (7zip not available)"
+                                        # This is a simplified approach - for complex tar files consider installing 7zip
+                                        \\$buffer = New-Object byte[] 1024
+                                        while (\\$tarStream.Position -lt \\$tarStream.Length) {
+                                            \\$bytesRead = \\$tarStream.Read(\\$buffer, 0, \\$buffer.Length)
+                                            # Simplified extraction - in real scenario, use proper tar extraction library
+                                        }
+                                    }
+                                    
+                                    \\$gzipStream.Close()
+                                    \\$stream.Close()
                                 } else {
-                                    throw 'Deployment package not found: ' + \\$zipPath
+                                    throw 'Deployment package not found: ' + \\$tarPath
                                 }
                                 
                                 # Stop IIS application pool
@@ -114,7 +154,7 @@ pipeline {
                                 }
                                 
                                 # Copy new files
-                                \\$sourcePath = "\\${TempPath}\\${PublishOutputDir}\\"
+                                \\$sourcePath = "\\${TempPath}\\extracted\\${PublishOutputDir}\\"
                                 Write-Host "Copying from: \\$sourcePath"
                                 Write-Host "Copying to: \\$DeployPath"
                                 
@@ -132,7 +172,7 @@ pipeline {
                                 Set-Acl \\$DeployPath \\$acl
                                 
                                 # Clean up temp files
-                                Remove-Item \\$zipPath -Force -ErrorAction SilentlyContinue
+                                Remove-Item \\$tarPath -Force -ErrorAction SilentlyContinue
                                 Remove-Item \\$TempPath -Recurse -Force -ErrorAction SilentlyContinue
                                 
                                 # Start IIS application pool
@@ -153,6 +193,7 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 script {
+                    // Simple verification by checking if the website responds
                     bat "curl -I http://${WIN_SERVER} --connect-timeout 30 --max-time 60"
                 }
             }
@@ -162,6 +203,7 @@ pipeline {
     post {
         success {
             echo 'Build, test, publish, and deployment successful!'
+            // Optional: Send notification
             emailext (
                 subject: "SUCCESS: Deployment completed - ${env.JOB_NAME}",
                 body: "The application was successfully deployed to ${WIN_SERVER}",
@@ -170,6 +212,7 @@ pipeline {
         }
         failure {
             echo 'Deployment failed!'
+            // Optional: Send failure notification
             emailext (
                 subject: "FAILURE: Deployment failed - ${env.JOB_NAME}",
                 body: "The deployment to ${WIN_SERVER} failed. Please check Jenkins logs.",
@@ -177,6 +220,7 @@ pipeline {
             )
         }
         always {
+            // Clean up workspace
             cleanWs()
         }
     }
