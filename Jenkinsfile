@@ -17,7 +17,7 @@ pipeline {
         SITE_NAME = "MyWebsite01"                        // IIS Site name
         
         // Credentials ID (update with your actual credentials ID)
-        WIN_CREDENTIALS_ID = "windows-admin-credentials"
+        WIN_CREDENTIALS_ID = "windows-admin-password"
     }
 
     stages {
