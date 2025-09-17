@@ -247,6 +247,7 @@ pipeline {
                             Write-Host 'Deployment Path Exists: ' \\$result.DeployPathExists
                             Write-Host 'Number of files deployed: ' \\$result.FileCount
                             
+                            # Use \\$true without the dollar sign escape for boolean comparison
                             if (\\$result.AppPoolStatus -eq 'Started' -and \\$result.SiteStatus -eq 'Started' -and \\$result.DeployPathExists -eq \\$true -and \\$result.FileCount -gt 0) {
                                 exit 0
                             } else {
