@@ -105,7 +105,7 @@ pipeline {
                                 Stop-WebAppPool -Name \\$AppPoolName -ErrorAction SilentlyContinue
                                 
                                 # Backup existing deployment (optional)
-                                \\$backupPath = "\\${DeployPath}_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+                                \\$backupPath = "\\${DeployPath}_Backup_\\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
                                 if (Test-Path \\$DeployPath) {
                                     Copy-Item \\$DeployPath \\$backupPath -Recurse -Force
                                 }
